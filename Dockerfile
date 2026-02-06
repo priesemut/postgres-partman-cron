@@ -15,22 +15,32 @@ RUN apk add --no-cache \
 
 WORKDIR /tmp
 
+# Disable LLVM by creating a dummy clang-19 that creates empty .bc files
+RUN echo '#!/bin/sh' > /usr/bin/clang-19 && \
+    echo 'for arg in "$@"; do case "$arg" in *.bc) touch "$arg"; exit 0 ;; esac; done' >> /usr/bin/clang-19 && \
+    echo 'exit 0' >> /usr/bin/clang-19 && \
+    chmod +x /usr/bin/clang-19 && \
+    mkdir -p /usr/lib/llvm19/bin && \
+    echo '#!/bin/sh' > /usr/lib/llvm19/bin/llvm-lto && \
+    echo 'exit 0' >> /usr/lib/llvm19/bin/llvm-lto && \
+    chmod +x /usr/lib/llvm19/bin/llvm-lto
 
-# Build pg_partman (with NO_LLVM to avoid LLVM version mismatch)
+
+# Build pg_partman
 RUN echo "### Building pg_partman ${PG_PARTMAN_VERSION}" && \
     curl -fL -o pg_partman.tar.gz "https://github.com/pgpartman/pg_partman/archive/refs/tags/v${PG_PARTMAN_VERSION}.tar.gz" && \
     tar -xzf pg_partman.tar.gz && \
     cd pg_partman-${PG_PARTMAN_VERSION} && \
-    make NO_LLVM=1 && \
-    make NO_LLVM=1 install
+    make && \
+    make install
 
-# Build pg_cron (with NO_LLVM to avoid LLVM version mismatch)
+# Build pg_cron
 RUN echo "### Building pg_cron ${PG_CRON_VERSION}" && \
     curl -fL -o pg_cron.tar.gz "https://github.com/citusdata/pg_cron/archive/refs/tags/v${PG_CRON_VERSION}.tar.gz" && \
     tar -xzf pg_cron.tar.gz && \
     cd pg_cron-${PG_CRON_VERSION} && \
-    make NO_LLVM=1 && \
-    make NO_LLVM=1 install
+    make && \
+    make install
 
 # Final image
 ARG PG_VERSION=17
