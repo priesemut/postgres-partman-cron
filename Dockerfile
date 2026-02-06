@@ -9,9 +9,12 @@ RUN apk add --no-cache \
     build-base \
     clang \
     llvm \
+    llvm-dev \
     git \
     curl \
-    postgresql-dev
+    postgresql-dev \
+    gcc \
+    musl-dev
 
 WORKDIR /tmp
 
@@ -42,11 +45,13 @@ RUN apk add --no-cache \
     libstdc++
 
 # Copy compiled extensions from builder
+RUN mkdir -p /usr/local/lib/postgresql /usr/local/share/postgresql/extension
 COPY --from=builder /usr/local/lib/postgresql/*.so /usr/local/lib/postgresql/
 COPY --from=builder /usr/local/share/postgresql/extension/* /usr/local/share/postgresql/extension/
 
 # Configure PostgreSQL to preload pg_cron
-RUN echo "shared_preload_libraries = 'pg_cron'" >> /usr/local/share/postgresql/postgresql.conf.sample && \
+RUN mkdir -p /usr/local/share/postgresql && \
+    echo "shared_preload_libraries = 'pg_cron'" >> /usr/local/share/postgresql/postgresql.conf.sample && \
     echo "cron.database_name = 'postgres'" >> /usr/local/share/postgresql/postgresql.conf.sample
 
 # Add initialization script to create extensions
