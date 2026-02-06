@@ -7,53 +7,30 @@ ARG PG_CRON_VERSION
 
 RUN apk add --no-cache \
     build-base \
-    clang \
-    llvm \
-    llvm-dev \
     git \
     curl \
     postgresql-dev \
     gcc \
-    musl-dev \
-    perl
+    musl-dev
 
 WORKDIR /tmp
 
-# Create a clang-19 wrapper that skips LLVM bitcode generation
-RUN mkdir -p /usr/local/bin && \
-    echo '#!/bin/sh' > /usr/local/bin/clang-19 && \
-    echo 'for arg in "$@"; do' >> /usr/local/bin/clang-19 && \
-    echo '    case "$arg" in' >> /usr/local/bin/clang-19 && \
-    echo '        *.bc) touch "$arg"; exit 0 ;;' >> /usr/local/bin/clang-19 && \
-    echo '    esac' >> /usr/local/bin/clang-19 && \
-    echo 'done' >> /usr/local/bin/clang-19 && \
-    echo 'exec clang "$@"' >> /usr/local/bin/clang-19 && \
-    chmod +x /usr/local/bin/clang-19
 
-# Patch PostgreSQL Makefiles to remove LTO compilation flags
-RUN for f in /usr/local/lib/postgresql/pgxs/src/Makefile.global* /usr/local/lib/postgresql/pgxs/src/makefiles/Makefile.global*; do \
-        if [ -f "$f" ]; then \
-            sed -i 's|-flto=thin||g' "$f"; \
-            sed -i 's|-flto||g' "$f"; \
-            sed -i 's|-emit-llvm||g' "$f"; \
-        fi; \
-    done || true
-
-# Build pg_partman
+# Build pg_partman (with NO_LLVM to avoid LLVM version mismatch)
 RUN echo "### Building pg_partman ${PG_PARTMAN_VERSION}" && \
     curl -fL -o pg_partman.tar.gz "https://github.com/pgpartman/pg_partman/archive/refs/tags/v${PG_PARTMAN_VERSION}.tar.gz" && \
     tar -xzf pg_partman.tar.gz && \
     cd pg_partman-${PG_PARTMAN_VERSION} && \
-    make && \
-    make install
+    make NO_LLVM=1 && \
+    make NO_LLVM=1 install
 
-# Build pg_cron
+# Build pg_cron (with NO_LLVM to avoid LLVM version mismatch)
 RUN echo "### Building pg_cron ${PG_CRON_VERSION}" && \
     curl -fL -o pg_cron.tar.gz "https://github.com/citusdata/pg_cron/archive/refs/tags/v${PG_CRON_VERSION}.tar.gz" && \
     tar -xzf pg_cron.tar.gz && \
     cd pg_cron-${PG_CRON_VERSION} && \
-    make && \
-    make install
+    make NO_LLVM=1 && \
+    make NO_LLVM=1 install
 
 # Final image
 ARG PG_VERSION=17
