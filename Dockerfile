@@ -14,13 +14,41 @@ RUN apk add --no-cache \
     curl \
     postgresql-dev \
     gcc \
-    musl-dev
+    musl-dev \
+    perl
 
 WORKDIR /tmp
 
-# Patch PostgreSQL build configuration to disable LTO
-RUN sed -i 's/-flto=thin/-fno-lto/g' /usr/local/lib/postgresql/pgxs/src/Makefile.global 2>/dev/null || true && \
-    sed -i 's/-flto/-fno-lto/g' /usr/local/lib/postgresql/pgxs/src/Makefile.global 2>/dev/null || true
+# Create a clang-19 wrapper that disables LTO compilation
+RUN mkdir -p /usr/local/bin && \
+    cat > /usr/local/bin/clang-19 << 'EOF'
+#!/bin/sh
+# Convert all arguments to remove LTO and bitcode flags
+args=""
+for arg in "$@"; do
+    case "$arg" in
+        -emit-llvm) ;;
+        -flto=thin) ;;
+        -flto) ;;
+        *.bc) arg="${arg%.bc}.o" ;;
+    esac
+    args="$args $arg"
+done
+exec gcc $args -fno-lto
+EOF
+    chmod +x /usr/local/bin/clang-19
+
+# Also create clang symlink for compatibility
+RUN ln -sf /usr/local/bin/clang-19 /usr/local/bin/clang
+
+# Patch PostgreSQL Makefiles to remove LTO compilation flags
+RUN for f in /usr/local/lib/postgresql/pgxs/src/Makefile.global* /usr/local/lib/postgresql/pgxs/src/makefiles/Makefile.global*; do \
+        if [ -f "$f" ]; then \
+            sed -i 's|-flto=thin||g' "$f"; \
+            sed -i 's|-flto||g' "$f"; \
+            sed -i 's|-emit-llvm||g' "$f"; \
+        fi; \
+    done || true
 
 # Build pg_partman
 RUN echo "### Building pg_partman ${PG_PARTMAN_VERSION}" && \
