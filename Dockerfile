@@ -36,10 +36,8 @@ for arg in "$@"; do
 done
 exec gcc $args -fno-lto
 EOF
-    chmod +x /usr/local/bin/clang-19
-
-# Also create clang symlink for compatibility
-RUN ln -sf /usr/local/bin/clang-19 /usr/local/bin/clang
+    chmod +x /usr/local/bin/clang-19 && \
+    ln -sf /usr/local/bin/clang-19 /usr/local/bin/clang
 
 # Patch PostgreSQL Makefiles to remove LTO compilation flags
 RUN for f in /usr/local/lib/postgresql/pgxs/src/Makefile.global* /usr/local/lib/postgresql/pgxs/src/makefiles/Makefile.global*; do \
