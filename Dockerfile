@@ -18,12 +18,16 @@ RUN apk add --no-cache \
 
 WORKDIR /tmp
 
+# Patch PostgreSQL build configuration to disable LTO
+RUN sed -i 's/-flto=thin/-fno-lto/g' /usr/local/lib/postgresql/pgxs/src/Makefile.global 2>/dev/null || true && \
+    sed -i 's/-flto/-fno-lto/g' /usr/local/lib/postgresql/pgxs/src/Makefile.global 2>/dev/null || true
+
 # Build pg_partman
 RUN echo "### Building pg_partman ${PG_PARTMAN_VERSION}" && \
     curl -fL -o pg_partman.tar.gz "https://github.com/pgpartman/pg_partman/archive/refs/tags/v${PG_PARTMAN_VERSION}.tar.gz" && \
     tar -xzf pg_partman.tar.gz && \
     cd pg_partman-${PG_PARTMAN_VERSION} && \
-    make WITH_LTO=0 && \
+    make && \
     make install
 
 # Build pg_cron
@@ -31,7 +35,7 @@ RUN echo "### Building pg_cron ${PG_CRON_VERSION}" && \
     curl -fL -o pg_cron.tar.gz "https://github.com/citusdata/pg_cron/archive/refs/tags/v${PG_CRON_VERSION}.tar.gz" && \
     tar -xzf pg_cron.tar.gz && \
     cd pg_cron-${PG_CRON_VERSION} && \
-    make WITH_LTO=0 && \
+    make && \
     make install
 
 # Final image
