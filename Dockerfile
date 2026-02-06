@@ -19,22 +19,16 @@ RUN apk add --no-cache \
 
 WORKDIR /tmp
 
-# Create a clang-19 wrapper that disables LTO compilation
+# Create a clang-19 wrapper that skips LLVM bitcode generation
 RUN mkdir -p /usr/local/bin && \
     echo '#!/bin/sh' > /usr/local/bin/clang-19 && \
-    echo 'args=""' >> /usr/local/bin/clang-19 && \
     echo 'for arg in "$@"; do' >> /usr/local/bin/clang-19 && \
     echo '    case "$arg" in' >> /usr/local/bin/clang-19 && \
-    echo '        -emit-llvm) ;;' >> /usr/local/bin/clang-19 && \
-    echo '        -flto=thin) ;;' >> /usr/local/bin/clang-19 && \
-    echo '        -flto) ;;' >> /usr/local/bin/clang-19 && \
-    echo '        *.bc) arg="${arg%.bc}.o" ;;' >> /usr/local/bin/clang-19 && \
+    echo '        *.bc) touch "$arg"; exit 0 ;;' >> /usr/local/bin/clang-19 && \
     echo '    esac' >> /usr/local/bin/clang-19 && \
-    echo '    args="$args $arg"' >> /usr/local/bin/clang-19 && \
     echo 'done' >> /usr/local/bin/clang-19 && \
-    echo 'exec gcc $args -fno-lto' >> /usr/local/bin/clang-19 && \
-    chmod +x /usr/local/bin/clang-19 && \
-    ln -sf /usr/local/bin/clang-19 /usr/local/bin/clang
+    echo 'exec clang "$@"' >> /usr/local/bin/clang-19 && \
+    chmod +x /usr/local/bin/clang-19
 
 # Patch PostgreSQL Makefiles to remove LTO compilation flags
 RUN for f in /usr/local/lib/postgresql/pgxs/src/Makefile.global* /usr/local/lib/postgresql/pgxs/src/makefiles/Makefile.global*; do \
