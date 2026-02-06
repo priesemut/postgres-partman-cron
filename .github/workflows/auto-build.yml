@@ -1,0 +1,129 @@
+name: Scheduled Version Check & Build
+
+on:
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Get Latest Upstream Versions
+        id: versions
+        run: |
+          # Get latest PostgreSQL Alpine image tag (major version only)
+          get_postgres_version() {
+            # Get all tags and find the latest XX-alpine pattern
+            curl -s "https://registry.hub.docker.com/v2/repositories/library/postgres/tags?page_size=100" | \
+              jq -r '.results[].name' | \
+              grep -E '^[0-9]+-alpine$' | \
+              sort -t'-' -k1 -n -r | \
+              head -1
+          }
+          
+          get_github_version() {
+            local repo=$1
+            curl -s "https://api.github.com/repos/${repo}/releases/latest" | jq -r .tag_name | sed 's/v//'
+          }
+
+          PG_ALPINE=$(get_postgres_version)
+          PG_VERSION=$(echo "$PG_ALPINE" | cut -d'-' -f1)
+          PG_PARTMAN=$(get_github_version "pgpartman/pg_partman")
+          PG_CRON=$(get_github_version "citusdata/pg_cron")
+
+          echo "Found versions: PostgreSQL=$PG_ALPINE, pg_partman=$PG_PARTMAN, pg_cron=$PG_CRON"
+
+          # Validation
+          if [[ -z "$PG_VERSION" || "$PG_VERSION" == "null" || -z "$PG_PARTMAN" || "$PG_PARTMAN" == "null" || -z "$PG_CRON" || "$PG_CRON" == "null" ]]; then
+            echo "Error. Unable to get one or more versions."
+            exit 1
+          fi
+
+          echo "pg_alpine=$PG_ALPINE" >> $GITHUB_OUTPUT
+          echo "pg_version=$PG_VERSION" >> $GITHUB_OUTPUT
+          echo "pg_partman=$PG_PARTMAN" >> $GITHUB_OUTPUT
+          echo "pg_cron=$PG_CRON" >> $GITHUB_OUTPUT
+          echo "combined=${PG_VERSION}_${PG_PARTMAN}_${PG_CRON}" >> $GITHUB_OUTPUT
+          
+      - name: Stop if this version was already built (release tag exists)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="image-${{ steps.versions.outputs.combined }}"
+          API="${{ github.api_url }}/repos/${{ github.repository }}/releases/tags/${TAG}"
+
+          echo "Checking if release exists for tag: ${TAG}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${API}")
+
+          if [ "${STATUS}" = "200" ]; then
+            echo "Release already exists. Skipping build/push."
+            echo "NEW_BUILD=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          if [ "${STATUS}" != "404" ]; then
+            echo "Unexpected status while checking release: ${STATUS}"
+            exit 1
+          fi
+
+          echo "No release found yet. Proceeding with build."
+          echo "NEW_BUILD=true" >> "$GITHUB_ENV"
+
+      - name: Set up QEMU
+        if: env.NEW_BUILD == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: env.NEW_BUILD == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        if: env.NEW_BUILD == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push
+        if: env.NEW_BUILD == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            PG_VERSION=${{ steps.versions.outputs.pg_version }}
+            PG_PARTMAN_VERSION=${{ steps.versions.outputs.pg_partman }}
+            PG_CRON_VERSION=${{ steps.versions.outputs.pg_cron }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/postgres-partman-cron:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/postgres-partman-cron:${{ steps.versions.outputs.combined }}
+
+      - name: Create GitHub Release (notify on successful new image)
+        if: success() && env.NEW_BUILD == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: image-${{ steps.versions.outputs.combined }}
+          name: "Image built: ${{ steps.versions.outputs.combined }}"
+          body: |
+            A new Docker image was built and pushed.
+
+            **Versions:**
+            - PostgreSQL: ${{ steps.versions.outputs.pg_alpine }}
+            - pg_partman: ${{ steps.versions.outputs.pg_partman }}
+            - pg_cron: ${{ steps.versions.outputs.pg_cron }}
+            
+            **Combined Tag:** ${{ steps.versions.outputs.combined }}
+            
+            **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
