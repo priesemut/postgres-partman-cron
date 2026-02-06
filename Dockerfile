@@ -57,20 +57,32 @@ RUN mkdir -p /usr/local/lib/postgresql /usr/local/share/postgresql/extension
 COPY --from=builder /usr/local/lib/postgresql/*.so /usr/local/lib/postgresql/
 COPY --from=builder /usr/local/share/postgresql/extension/* /usr/local/share/postgresql/extension/
 
-# Configure PostgreSQL to preload pg_cron
-RUN mkdir -p /usr/local/share/postgresql && \
-    echo "shared_preload_libraries = 'pg_cron'" >> /usr/local/share/postgresql/postgresql.conf.sample && \
-    echo "cron.database_name = 'postgres'" >> /usr/local/share/postgresql/postgresql.conf.sample
+# Note: pg_cron requires shared_preload_libraries = 'pg_cron' in postgresql.conf
+# Users can enable this by:
+# 1. Setting POSTGRES_ARGS="-c shared_preload_libraries=pg_cron"
+# 2. Or mounting a custom postgresql.conf
+# 3. Or using: ALTER SYSTEM SET shared_preload_libraries = 'pg_cron'; (requires restart)
 
-# Add initialization script to create extensions
+# Add optional initialization script to create extensions (only runs if extensions are enabled)
 RUN mkdir -p /docker-entrypoint-initdb.d && \
-    echo "#!/bin/bash" > /docker-entrypoint-initdb.d/00-create-extensions.sh && \
-    echo "set -e" >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
-    echo "" >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
-    echo "psql -v ON_ERROR_STOP=1 --username \"\$POSTGRES_USER\" --dbname \"\$POSTGRES_DB\" <<-EOSQL" >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
-    echo "    CREATE EXTENSION IF NOT EXISTS pg_cron;" >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
-    echo "    CREATE EXTENSION IF NOT EXISTS pg_partman;" >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
-    echo "EOSQL" >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '#!/bin/bash' > /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo 'set -e' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '# Check if pg_cron is loaded in shared_preload_libraries' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo 'if psql -v ON_ERROR_STOP=0 --username "$POSTGRES_USER" --dbname postgres -tAc "SHOW shared_preload_libraries" | grep -q pg_cron; then' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '    echo "pg_cron is enabled, creating extension..."' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '        CREATE EXTENSION IF NOT EXISTS pg_cron;' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo 'EOSQL' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo 'else' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '    echo "pg_cron not in shared_preload_libraries, skipping extension creation"' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo 'fi' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '# pg_partman can always be created' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo 'echo "Creating pg_partman extension..."' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo 'psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo '    CREATE EXTENSION IF NOT EXISTS pg_partman;' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
+    echo 'EOSQL' >> /docker-entrypoint-initdb.d/00-create-extensions.sh && \
     chmod +x /docker-entrypoint-initdb.d/00-create-extensions.sh
 
 LABEL org.opencontainers.image.description="PostgreSQL Alpine with pg_partman and pg_cron extensions" \
