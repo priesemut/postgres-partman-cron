@@ -127,3 +127,14 @@ jobs:
             
             **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
+      - name: Create GitHub Release (notify on successful new image)
+        if: success() && env.NEW_BUILD == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: image-${{ steps.versions.outputs.combined }}
+          name: "Image built: ${{ steps.versions.outputs.combined }}"
+          body: |
+            A new Docker image was built and pushed.
+
+            Version: ${{ steps.versions.outputs.combined }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
