@@ -23,7 +23,7 @@ RUN echo "### Building pg_partman ${PG_PARTMAN_VERSION}" && \
     curl -fL -o pg_partman.tar.gz "https://github.com/pgpartman/pg_partman/archive/refs/tags/v${PG_PARTMAN_VERSION}.tar.gz" && \
     tar -xzf pg_partman.tar.gz && \
     cd pg_partman-${PG_PARTMAN_VERSION} && \
-    make && \
+    make WITH_LTO=0 && \
     make install
 
 # Build pg_cron
@@ -31,7 +31,7 @@ RUN echo "### Building pg_cron ${PG_CRON_VERSION}" && \
     curl -fL -o pg_cron.tar.gz "https://github.com/citusdata/pg_cron/archive/refs/tags/v${PG_CRON_VERSION}.tar.gz" && \
     tar -xzf pg_cron.tar.gz && \
     cd pg_cron-${PG_CRON_VERSION} && \
-    make && \
+    make WITH_LTO=0 && \
     make install
 
 # Final image
