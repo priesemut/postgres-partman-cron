@@ -21,21 +21,18 @@ WORKDIR /tmp
 
 # Create a clang-19 wrapper that disables LTO compilation
 RUN mkdir -p /usr/local/bin && \
-    cat > /usr/local/bin/clang-19 << 'EOF'
-#!/bin/sh
-# Convert all arguments to remove LTO and bitcode flags
-args=""
-for arg in "$@"; do
-    case "$arg" in
-        -emit-llvm) ;;
-        -flto=thin) ;;
-        -flto) ;;
-        *.bc) arg="${arg%.bc}.o" ;;
-    esac
-    args="$args $arg"
-done
-exec gcc $args -fno-lto
-EOF
+    echo '#!/bin/sh' > /usr/local/bin/clang-19 && \
+    echo 'args=""' >> /usr/local/bin/clang-19 && \
+    echo 'for arg in "$@"; do' >> /usr/local/bin/clang-19 && \
+    echo '    case "$arg" in' >> /usr/local/bin/clang-19 && \
+    echo '        -emit-llvm) ;;' >> /usr/local/bin/clang-19 && \
+    echo '        -flto=thin) ;;' >> /usr/local/bin/clang-19 && \
+    echo '        -flto) ;;' >> /usr/local/bin/clang-19 && \
+    echo '        *.bc) arg="${arg%.bc}.o" ;;' >> /usr/local/bin/clang-19 && \
+    echo '    esac' >> /usr/local/bin/clang-19 && \
+    echo '    args="$args $arg"' >> /usr/local/bin/clang-19 && \
+    echo 'done' >> /usr/local/bin/clang-19 && \
+    echo 'exec gcc $args -fno-lto' >> /usr/local/bin/clang-19 && \
     chmod +x /usr/local/bin/clang-19 && \
     ln -sf /usr/local/bin/clang-19 /usr/local/bin/clang
 
