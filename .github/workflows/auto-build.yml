@@ -18,13 +18,13 @@ jobs:
       - name: Get Latest Upstream Versions
         id: versions
         run: |
-          # Get latest PostgreSQL Alpine image tag (major version only)
+          # Get latest PostgreSQL Alpine image tag
           get_postgres_version() {
-            # Get all tags and find the latest XX-alpine pattern
+            # Get all tags and find the latest XX-alpine or XX.X-alpine pattern
             curl -s "https://registry.hub.docker.com/v2/repositories/library/postgres/tags?page_size=100" | \
               jq -r '.results[].name' | \
-              grep -E '^[0-9]+-alpine$' | \
-              sort -t'-' -k1 -n -r | \
+              grep -E '^[0-9]+(\.[0-9]+)?-alpine$' | \
+              sort -V -r | \
               head -1
           }
           

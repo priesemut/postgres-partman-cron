@@ -43,7 +43,7 @@ RUN echo "### Building pg_cron ${PG_CRON_VERSION}" && \
     make install
 
 # Final image
-ARG PG_VERSION=17
+ARG PG_VERSION=18
 FROM postgres:${PG_VERSION}-alpine
 
 ARG PG_PARTMAN_VERSION
