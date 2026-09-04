@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Get Latest Upstream Versions
         id: versions
@@ -111,7 +111,7 @@ jobs:
 
       - name: Create GitHub Release (notify on successful new image)
         if: success() && env.NEW_BUILD == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: image-${{ steps.versions.outputs.combined }}
           name: "Image built: ${{ steps.versions.outputs.combined }}"
